@@ -24,6 +24,7 @@
 #include "Angles.hpp"
 #include "Constants.hpp"
 #include "IniFile.hpp"
+#include "NumberToImage.hpp"
 #include "Utilities.hpp"
 
 #include <iostream>
@@ -51,6 +52,7 @@ RadarCalculation::RadarCalculation()
     trueVectors = true;
     vectorLengthMinutes = 6;
     arpaOn = false;
+    largestARPADisplayId = 0;
 
     //initialise scanArray size (360 x rangeResolution points per scan)
     rangeResolution = 64;
@@ -76,8 +78,10 @@ RadarCalculation::~RadarCalculation()
     //dtor
 }
 
-void RadarCalculation::load(std::string radarConfigFile)
+void RadarCalculation::load(std::string radarConfigFile, irr::IrrlichtDevice* dev)
 {
+    device = dev;
+
     //Load parameters from the radarConfig file (if it exists)
     irr::u32 numberOfRadarRanges = IniFile::iniFileTou32(radarConfigFile,"NumberOfRadarRanges");
     if (numberOfRadarRanges==0) {
@@ -462,6 +466,7 @@ void RadarCalculation::scan(irr::core::vector3d<int64_t> offsetPosition, const T
                                         newContact.totalZMovementEst = 0;
 
                                         //Zeros for estimated state
+                                        newContact.estimate.displayID = 0;
                                         newContact.estimate.stationary = true;
                                         newContact.estimate.lost = false;
                                         newContact.estimate.absVectorX = 0;
@@ -620,6 +625,7 @@ void RadarCalculation::updateARPA(irr::core::vector3d<int64_t> offsetPosition, c
 
         if (!arpaOn) {
             //Set all contacts to zero (untracked)
+            arpaContacts.at(i).estimate.displayID = 0;
             arpaContacts.at(i).estimate.stationary = true;
             arpaContacts.at(i).estimate.lost = false;
             arpaContacts.at(i).estimate.absVectorX = 0;
@@ -655,6 +661,11 @@ void RadarCalculation::updateARPA(irr::core::vector3d<int64_t> offsetPosition, c
                     TODO: Improve the logic of this, probably getting longest time possible before the behaviour was significantly
                     different */
 
+                    //If ID is 0 (unassigned), set id and increment
+                    if (arpaContacts.at(i).estimate.displayID==0) {
+                        arpaContacts.at(i).estimate.displayID = ++largestARPADisplayId;
+                    }
+
                     s32 currentScanIndex = arpaContacts.at(i).scans.size() - 1;
                     s32 referenceScanIndex = currentScanIndex - 6;
                     if (referenceScanIndex < 0) {
@@ -670,11 +681,19 @@ void RadarCalculation::updateARPA(irr::core::vector3d<int64_t> offsetPosition, c
                         f32 deltaX = currentScanData.x - referenceScanData.x;
                         f32 deltaZ = currentScanData.z - referenceScanData.z;
 
+                        //Absolute vector
                         arpaContacts.at(i).estimate.absVectorX = deltaX/deltaTime; //m/s
                         arpaContacts.at(i).estimate.absVectorZ = deltaZ/deltaTime; //m/s
                         arpaContacts.at(i).estimate.absHeading = std::atan2(deltaX,deltaZ)/RAD_IN_DEG;
                         if (arpaContacts.at(i).estimate.absHeading < 0 ) {
                             arpaContacts.at(i).estimate.absHeading += 360;
+                        }
+                        //Relative vector:
+                        arpaContacts.at(i).estimate.relVectorX = arpaContacts.at(i).estimate.absVectorX - ownShip.getSpeed() * sin((ownShip.getHeading())*core::DEGTORAD);
+                        arpaContacts.at(i).estimate.relVectorZ = arpaContacts.at(i).estimate.absVectorZ - ownShip.getSpeed() * cos((ownShip.getHeading())*core::DEGTORAD); //ownShipSpeed in m/s
+                        arpaContacts.at(i).estimate.relHeading = std::atan2(arpaContacts.at(i).estimate.relVectorX,arpaContacts.at(i).estimate.relVectorZ)/RAD_IN_DEG;
+                        if (arpaContacts.at(i).estimate.relHeading < 0 ) {
+                            arpaContacts.at(i).estimate.relHeading += 360;
                         }
 
                         //Estimated current position:
@@ -687,9 +706,16 @@ void RadarCalculation::updateARPA(irr::core::vector3d<int64_t> offsetPosition, c
                         arpaContacts.at(i).estimate.range =  std::sqrt(pow(relX,2)+pow(relZ,2))/M_IN_NM; //Nm
                         arpaContacts.at(i).estimate.speed = std::sqrt(pow(arpaContacts.at(i).estimate.absVectorX,2) + pow(arpaContacts.at(i).estimate.absVectorZ,2))*MPS_TO_KTS;
 
-                        if (arpaContacts.at(i).estimate.speed >= 2) {
-                            //std::cout << "Contact " << i << " est speed " << arpaContacts.at(i).estimate.speed << " est heading " << arpaContacts.at(i).estimate.absHeading << " on bearing " << arpaContacts.at(i).estimate.bearing << " at range " << arpaContacts.at(i).estimate.range << " Nm." <<std::endl;
-                        }
+                        //TODO: CPA AND TCPA here: Need checking/testing
+                        f32 contactRelAngle = arpaContacts.at(i).estimate.relHeading - (180+arpaContacts.at(i).estimate.bearing);
+                        f32 contactRange = arpaContacts.at(i).estimate.range; //(Nm)
+                        f32 relDistanceToCPA = contactRange * cos(contactRelAngle*RAD_IN_DEG); //Distance along the other ship's relative motion line
+                        f32 relativeSpeed = std::sqrt(pow(arpaContacts.at(i).estimate.relVectorX,2) + pow(arpaContacts.at(i).estimate.relVectorZ,2))*MPS_TO_KTS;
+                        if (fabs(relativeSpeed) < 0.001) {relativeSpeed = 0.001;} //Avoid division by zero
+
+                        arpaContacts.at(i).estimate.cpa = contactRange * sin(contactRelAngle*RAD_IN_DEG);
+                        arpaContacts.at(i).estimate.tcpa = 60*relDistanceToCPA/relativeSpeed; // (nm / (nm/hr)), so time in hours, converted to minutes
+                        std::cout << "Contact " << arpaContacts.at(i).estimate.displayID << " CPA: " <<  arpaContacts.at(i).estimate.cpa << " nm in " << arpaContacts.at(i).estimate.tcpa << " minutes" << std::endl;
 
 
                     } //If time between scans > 0
@@ -778,12 +804,24 @@ void RadarCalculation::render(irr::video::IImage * radarImage, irr::video::IImag
             drawCircle(radarImageOverlaid,deltaX,deltaY,radarRadiusPx/40,255,255,255,255); //Draw circle around contact
             //drawLine(radarImageOverlaid,deltaX,deltaY,deltaX+10,deltaY+25,255,255,255,255);//Todo; Make a sensible vector (true or rel)
 
+            //Draw contact's display ID :
+            video::IImage* idNumberImage = NumberToImage::getImage(thisEstimate.displayID,device);
+            //video::IImage* idNumberImage = NumberToImage::getImage(1234567890,device); //FOR TESTING
+            if (idNumberImage) {
+                idNumberImage->copyTo(radarImageOverlaid,core::position2d<s32>(deltaX-10,deltaY-10));
+                //TODO: Change to copyToWithAlpha
+                idNumberImage->drop();
+            }
+
             //draw a vector
-            f32 adjustedVectorX = thisEstimate.absVectorX;
-            f32 adjustedVectorZ = thisEstimate.absVectorZ;
-            if (!trueVectors) {
-                adjustedVectorZ -= ownShipSpeed * cos((ownShipHeading)*core::DEGTORAD);
-                adjustedVectorX -= ownShipSpeed * sin((ownShipHeading)*core::DEGTORAD); //ownShipSpeed in m/s
+            f32 adjustedVectorX;
+            f32 adjustedVectorZ;
+            if (trueVectors) {
+                adjustedVectorX = thisEstimate.absVectorX;
+                adjustedVectorZ = thisEstimate.absVectorZ;
+            } else {
+                adjustedVectorX = thisEstimate.relVectorX;
+                adjustedVectorZ = thisEstimate.relVectorZ;
             }
 
             //Rotate if in head/course up mode

@@ -47,14 +47,20 @@ struct ARPAScan {
 };
 
 struct ARPAEstimatedState {
+    irr::u32 displayID; //User displayed ID
     bool stationary; // E.g. if detected as static and a small RCS or a buoy.
     irr::f32 absVectorX; //Estimated X speed (m/s)
     irr::f32 absVectorZ; //Estimated Z speed (m/s)
     irr::f32 absHeading; //Estimated heading (deg)
+    irr::f32 relVectorX; //Estimated X speed (m/s)
+    irr::f32 relVectorZ; //Estimated Z speed (m/s)
+    irr::f32 relHeading; //Estimated heading (deg)
     irr::f32 range; //Estimated current range from own ship (Nm)
     irr::f32 bearing; //Estimated current bearing from own ship (deg)
     irr::f32 speed; //Estimated current speed (Kts)
     bool lost; //True if we last scanned more than a defined time ago.
+    irr::f32 cpa; //Closest point of approach in Nm
+    irr::f32 tcpa; //Time to closest point of approach (mins)
     //Also to implement
     //Distance of CPA
     //Time to CPA
@@ -75,7 +81,7 @@ class RadarCalculation
     public:
         RadarCalculation();
         virtual ~RadarCalculation();
-        void load(std::string radarConfigFile);
+        void load(std::string radarConfigFile, irr::IrrlichtDevice* dev);
         void increaseRange();
         void decreaseRange();
         irr::f32 getRangeNm() const;
@@ -103,11 +109,13 @@ class RadarCalculation
         void update(irr::video::IImage * radarImage, irr::video::IImage * radarImageOverlaid, irr::core::vector3d<int64_t> offsetPosition, const Terrain& terrain, const OwnShip& ownShip, const Buoys& buoys, const OtherShips& otherShips, irr::f32 weather, irr::f32 rain, irr::f32 tideHeight, irr::f32 deltaTime, uint64_t absoluteTime, irr::core::vector2di mouseRelPosition, bool isMouseDown);
 
     private:
+        irr::IrrlichtDevice* device;
         std::vector<std::vector<irr::f32> > scanArray;
         std::vector<std::vector<irr::f32> > scanArrayAmplified;
         std::vector<std::vector<irr::f32> > scanArrayAmplifiedPrevious;
         std::vector<ARPAContact> arpaContacts;
         bool arpaOn;
+        irr::u32 largestARPADisplayId;
         irr::f32 radarGain;
         irr::f32 radarRainClutterReduction;
         irr::f32 radarSeaClutterReduction;
