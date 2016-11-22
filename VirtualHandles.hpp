@@ -27,6 +27,7 @@ private:
     SimulationModel* model;
     void send();
     void sendParameter(std::string key, double val);
+    void sendParameter(std::string key, std::string val);
     void receive(sio::event &);
 };
 

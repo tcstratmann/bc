@@ -26,18 +26,72 @@
 #include "SimulationModel.hpp"
 #include "Utilities.hpp"
 #include "Constants.hpp"
+#include <math.h>       /* atan2 */
+#include <thread>
 
 const int DEFAULT_PORT = 5006;
 
 using namespace std;
 
 bool connected = false;
+long const SHIP1_START_TIME = 360000;  // 6min
+long const SHIP2_START_TIME = 1320000;  // 22min
 MergeToolSocket::MergeToolSocket() //Constructor
 {
-    model=0; //Not linked at the moment
-    std::cout << "Init MergeToolSocket";
+    std::cout << "Init MergeToolSocket\n";
 
-    //startServer(DEFAULT_PORT);
+    #ifdef __WIN32__
+       WORD versionWanted = MAKEWORD(2, 2);
+       WSADATA wsaData;
+       int wsaerr = WSAStartup(versionWanted, &wsaData);
+    if (wsaerr != 0)
+    {
+        /* Tell the user that we could not find a usable WinSock DLL.*/
+
+        printf("The Winsock dll not found!\n");
+
+        exit(0);
+    }
+    else
+    {
+           printf("The Winsock dll found!\n");
+
+           printf("The status: %s.\n", wsaData.szSystemStatus);
+    }
+     /* Confirm that the WinSockerDLL supports 2.2.        */
+
+    /* Note that if the DLL supports versions greater    */
+
+    /* than 2.2 in addition to 2.2, it will still return */
+
+    /* 2.2 in wVersion since that is the version we      */
+
+    /* requested.                                        */
+
+    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+
+    {
+
+        /* Tell the user that we could not find a usable WinSock DLL.*/
+
+        printf("The dll do not support the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion),HIBYTE(wsaData.wVersion));
+
+        WSACleanup();
+
+        exit(0);
+    }
+    else
+
+    {
+           printf("The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion),HIBYTE(wsaData.wVersion));
+
+           printf("The highest version this dll can support: %u.%u\n", LOBYTE(wsaData.wHighVersion), HIBYTE(wsaData.wHighVersion));
+    }
+    #endif
+
+    model=0; //Not linked at the moment
+
+    startServer(DEFAULT_PORT);
 }
 
 MergeToolSocket::~MergeToolSocket() //Destructor
@@ -48,15 +102,20 @@ MergeToolSocket::~MergeToolSocket() //Destructor
     std::cout << "Shut down MergeToolSocket connection\n";
     close(newsockfd);
     close(sockfd);
+
+    closesocket(newsockfd);
+    closesocket(sockfd);
+
 }
 
 bool MergeToolSocket::startServer(int portno){
      socklen_t clilen;
-     char buffer[256];
      struct sockaddr_in serv_addr, cli_addr;
      int n;
 
-     sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+     //sockfd = socket(AF_INET, SOCK_STREAM, 0);
+     sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
      if (sockfd < 0)
         error("ERROR opening socket");
      bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -72,9 +131,15 @@ bool MergeToolSocket::startServer(int portno){
      newsockfd = accept(sockfd,
                  (struct sockaddr *) &cli_addr,
                  &clilen);
-     if (newsockfd < 0)
+     if (newsockfd == SOCKET_ERROR || newsockfd < 0)
           error("ERROR on accept");
      connected = true;
+
+     std::cout << "\n Mergetool connected\n";
+
+     //std::thread t1(fetchData, newsockfd);
+     //t1.join();
+
      /*
      bzero(buffer,256);
      n = read(newsockfd,buffer,255);
@@ -87,25 +152,57 @@ bool MergeToolSocket::startServer(int portno){
 
 void MergeToolSocket::error(const char *msg)
 {
+    cout<<"Error^^\n";
     perror(msg);
-    exit(1);
+    //exit(1);
 }
 
 void MergeToolSocket::setModel(SimulationModel* model)
 {
 	this->model = model;
+	this->calcAnglesInited = false;
 }
-
+int num = 0;
 void MergeToolSocket::update()
 {
-    if(connected){
+    if(connected && num % 20 == 0){
         receive();
-        send();
+        sendModellData();
+        num = 1;
     }
+    num++;
 }
 
-void MergeToolSocket::send()
+double MergeToolSocket::calcAngle(int otherShipID)
 {
+    double otherX = model->getOtherShipPosX(otherShipID);
+	double otherZ = model->getOtherShipPosZ(otherShipID);
+
+	double ownX = model->getPosX();
+	double ownZ = model->getPosZ();
+
+	double deltaX = otherX - ownX;
+	double deltaZ = otherZ - ownZ;
+
+    //cout<<"\notherX : "<< otherX << " otherZ " << otherZ<<",myX : "<< ownX << " myZ " << ownZ<< "ship: " << otherShipID;
+    //cout<<"\ndX : "<< deltaX << " dZ " << deltaZ<< "ship: " << otherShipID;
+    double angle = atan2(deltaZ, deltaX) * 180.0 / PI;
+    angle = fmod(angle + 360.0 , 360.0); //between 0 and 360 instead -180 and 180
+	return angle;
+}
+
+// TODO: Works only on rather straight maps! Will fail on curvy water streets!
+bool MergeToolSocket::isShipPassed(double initShipAngle, double currentShipAngle){
+    //cout<<"init angl: " << initShipAngle;
+    double anglediff = fmod((initShipAngle - currentShipAngle + 360), 360);
+    //anglediff = fmod(anglediff + 360.0 , 360.0); //between 0 and 360 instead -180 and 180
+    // angle diff to init is at least 130
+	return anglediff > 130.0 && anglediff < 230.0;
+}
+
+void MergeToolSocket::sendModellData()
+{
+    cout<<"anfang sende^^";
 	/* type: irr::f32
 	model->getLat()
 	model->getLong()
@@ -121,9 +218,29 @@ void MergeToolSocket::send()
 	model->getStbdEngine() //FIXME: currently commented out in SimulationModel
 	*/
 
+	double angleOtherShip1 = calcAngle(0);
+	double angleOtherShip2 = calcAngle(1);
+    bool ship1Passed = this->isShipPassed(this->otherShip1InitAngle, angleOtherShip1);
+    bool ship2Passed = this->isShipPassed(this->otherShip2InitAngle, angleOtherShip2);
+
+	if(!this->calcAnglesInited){
+        this->calcAnglesInited= true;
+        this->otherShip1InitAngle = angleOtherShip1;
+        this->otherShip2InitAngle = angleOtherShip2;
+	}
+    //cout<<"\nship1 : "<< angleOtherShip1 << " ship 2: " << angleOtherShip2;
+    //cout<<"ship1 : "<< ship1Passed << " ship 2: " << ship2Passed;
 
 
 
+    double time = model->getSimulationTime();
+
+    double tcpaShip1 = SHIP1_START_TIME - time;
+    double tcpaShip2 = SHIP2_START_TIME - time;
+
+    tcpaShip1 = tcpaShip1 / (60.0 * 1000.0); //from millisecs to minutes
+    tcpaShip2 = tcpaShip2 / (60.0 * 1000.0); //from millisecs to minutes
+    //cout<<"sim time: "<< time;
 
     /*struct timeval tv;
     gettimeofday(&tv, 0);
@@ -140,9 +257,15 @@ void MergeToolSocket::send()
     //msg+= "ie_own_ship_name," + to_string(model->getLat()) + ",STRING,;";
     //msg+= "ie_own_ship_type," + to_string(model->getLat()) + ";";
 
-    msg+= "ie_own_ship_turn_rate," + to_string(model->getRateOfTurn()) + ";";
-    msg+= "ie_own_ship_rudder_angle," + to_string(model->getRudder()) + ";";
-    msg+= "ie_own_ship_orientation," + to_string(model->getHeading()) + ";";
+    msg+= "ie_own_ship_turn_rate," + to_string(model->getRateOfTurn()) + ",DOUBLE,;";
+    msg+= "ie_own_ship_rudder_angle," + to_string(model->getRudder()) + ",DOUBLE,;";
+    msg+= "ie_own_ship_orientation," + to_string(model->getHeading()) + ",DOUBLE,;";
+
+    msg+= "ie_ship1_tcpa," + to_string(tcpaShip1) + ",DOUBLE,;";
+    msg+= "ie_ship2_tcpa," + to_string(tcpaShip2) + ",DOUBLE,;";
+
+    msg+= "ie_ship1_passed," + to_string(ship1Passed) + ",STRING,;";
+    msg+= "ie_ship2_passed," + to_string(ship2Passed) + ",STRING,;";
 
 
 /*for number to getNumberOfOtherShips():
@@ -168,11 +291,16 @@ end for*/
     	msg+= prefix + "_speed_og," + to_string(model->getOtherShipSpeed(i))  + ",DOUBLE,;";
     	//msg+= prefix + "_tcpa;" + to_string(model->TODO(i) + ";"); // TODO
     }
+    msg+="\n";
+    SOCKET n = send(newsockfd, msg.c_str() , msg.size(), 0);
 
-    int n = write(newsockfd, msg.c_str() , msg.size());
 
-    if (n < 0) error("ERROR writing to socket");
+    if (n == SOCKET_ERROR || n < 0) error("eERROR writing to socket");
+    //n = send(newsockfd, buffer , 99, 0);
+    cout<<" ... gesendet^^\n";
 }
+
+
 
 void MergeToolSocket::receive()
 {

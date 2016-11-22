@@ -35,10 +35,10 @@
 #include <fstream> //To save to log
 
 // TCS Extensions
-#include "VirtualHandles.hpp"
+// #include "VirtualHandles.hpp"
 
 // DB Extensions
-#include "MergeToolSocket.hpp"
+// #include "MergeToolSocket.hpp"
 
 //Mac OS:
 #ifdef __APPLE__
@@ -56,12 +56,6 @@ using namespace irr;
 
 int main()
 {
-    #ifdef __WIN32__
-       WORD versionWanted = MAKEWORD(1, 1);
-       WSADATA wsaData;
-       WSAStartup(versionWanted, &wsaData);
-    #endif
-
     //Mac OS:
 	#ifdef __APPLE__
     //Find starting folder
@@ -265,12 +259,12 @@ int main()
     NMEA nmea(&model, serialPortName, device);
 
     // DB: create MergeToolSocket to provide Data to the MBA-Tracer
-    MergeToolSocket mergeToolSocket;
-    mergeToolSocket.setModel(&model);
+    //MergeToolSocket mergeToolSocket;
+    //mergeToolSocket.setModel(&model);
 
     //TCS: create virtual handles connection, linked to model FIXME
-    VirtualHandles virtualHandles;
-    virtualHandles.setModel(&model);
+    //VirtualHandles virtualHandles;
+    //virtualHandles.setModel(&model);
 
     //check enough time has elapsed to show the credits screen (5s)
     while(device->getTimer()->getRealTime() - creditsStartTime < 5000) {
@@ -288,13 +282,6 @@ int main()
     {
 
         network->update();
-
-        //TCS: update virtual handles
-        virtualHandles.update();
-
-        //DB: update mergetool socket
-        mergeToolSocket.update();
-
         //Check if time has elapsed, so we send data once per second.
         if (device->getTimer()->getTime() >= nextNMEATime) {
             nmea.updateNMEA();
@@ -342,6 +329,11 @@ int main()
         guiMain.drawGUI();
         driver->endScene();
 
+        //TCS: update virtual handles
+        //virtualHandles.update();
+
+        //DB: update mergetool socket
+        //mergeToolSocket.update();
     }
 
     //networking should be stopped (presumably with destructor when it goes out of scope?)

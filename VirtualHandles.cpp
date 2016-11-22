@@ -16,6 +16,8 @@
 #include <iostream>
 #include <sstream>
 #include <exception>
+#include <math.h>       /* round, floor, ceil, trunc */
+
 // for convenience
 using json = nlohmann::json;
 using namespace std;
@@ -33,7 +35,8 @@ using namespace sio;
 VirtualHandles::VirtualHandles() //Constructor
 {
     model=0; //Not linked at the moment
-    host.connect("http://10.53.1.83:8080");
+    host.connect("http://169.254.216.196:8080");
+    //host.connect("http://127.0.0.1:8080");
     std::string const msgString = "data";
 
     //typedef std::function<void(event& event)> event_listener;
@@ -66,7 +69,7 @@ void VirtualHandles::setModel(SimulationModel* model)
 
 void VirtualHandles::update()
 {
-    //receive();
+    //receive(); wird automatisch von socket io event handler aufgerufen wenn neue nachritcht
     send();
 }
 std::string const nameString = "name";
@@ -79,6 +82,19 @@ void VirtualHandles::sendParameter(string key, double val){
     object_message::ptr data = object_message::create();
     message::ptr name = string_message::create(key);
     message::ptr value = double_message::create(val);
+
+    data->get_map()[nameString]= name;
+    data->get_map()[valueString]= value;
+    host.socket()->emit("data", data);
+}
+
+void VirtualHandles::sendParameter(string key, string val){
+
+    //cout<<key << ": " << val<< "\n";
+
+    object_message::ptr data = object_message::create();
+    message::ptr name = string_message::create(key);
+    message::ptr value = string_message::create(val);
 
     data->get_map()[nameString]= name;
     data->get_map()[valueString]= value;
@@ -101,11 +117,11 @@ void VirtualHandles::send()
 
 
     sendParameter(rudderAngle, model->getRudder());
-    sendParameter(turnRate, model->getRateOfTurn());
+    sendParameter(turnRate, model->getRateOfTurn() * 2500.0);
     sendParameter(heading, model->getHeading());
     sendParameter(rudder, model->getRudder());
-    sendParameter(echolot, model->getLat());
-    sendParameter(gpsSpeed, model->getSOG());
+    sendParameter(echolot, round(model->getDepth()));
+    sendParameter(gpsSpeed, (round(2.0 * model->getSOG())));
     sendParameter(gpsCourse, model->getCOG());
 
     /* type: irr::f32
@@ -129,11 +145,11 @@ void VirtualHandles::receive(sio::event& event)
     sio::message::ptr const& data = event.get_message();
 
     auto m =  data->get_map();
-    for(auto iterator = data->get_map().begin(); iterator != data->get_map().end(); iterator++){
+    /*for(auto iterator = data->get_map().begin(); iterator != data->get_map().end(); iterator++){
         if(iterator->second->get_flag()==2){
         std::cout<<"\n k: " << iterator->first << " ,val:" << iterator->second->get_string();}else{
         std::cout<<"\n k: " << iterator->first << " ,val:" << iterator->second->get_double();}
-    }
+    }*/
 
     auto nameIterator = m.find("name");
 
@@ -150,7 +166,9 @@ void VirtualHandles::receive(sio::event& event)
             try
             {
                 double val = string_to_double(stringVal);
+                val = (val * 1.0) /100.0;
                 model->setPortEngine(val);
+                model->setStbdEngine(val);
                 cout<<"rec name: " << name << " : " << val << " \n";
             }
             catch (exception& e)
@@ -162,13 +180,16 @@ void VirtualHandles::receive(sio::event& event)
             try
             {
                 double val = string_to_double(stringVal);
+                val = (val * 1.0) / 100.0;
                 model->setStbdEngine(val);
                 cout<<"rec name: " << name << " : " << val << " \n";
             }
             catch (exception& e)
             {
                 cout<<stringVal << " is not a valid value for \"machine-telegraph\" to parse an double";
-            }        }else{
+            }
+        }else{
+
         }
     }
 

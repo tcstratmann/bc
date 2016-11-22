@@ -73,6 +73,8 @@ public:
     irr::f32 getAccelerator() const;
     irr::f32 getSpeed() const; //Gets the own ship's speed
     irr::f32 getHeading() const; //Gets the own ship's heading
+    irr::f32 getDepth(); //Gets the own ship's depth
+    irr::f32 getSimulationTime();
 
     irr::f32 getLat() const;
     irr::f32 getLong() const;

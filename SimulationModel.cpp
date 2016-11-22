@@ -389,6 +389,17 @@ SimulationModel::~SimulationModel()
         return(ownShip.getHeading());
     }
 
+    irr::f32 SimulationModel:: getDepth(){
+        //return (ownShip.getDepth());
+        //return(ownShip.getHeading());
+        return (ownShip.getDepth());
+    }
+
+    irr::f32 SimulationModel::getSimulationTime()
+    {
+        return device->getTimer()->getTime();
+    }
+
     void SimulationModel::setRudder(irr::f32 rudder)
     {
         //Set the rudder (-ve is port, +ve is stbd)

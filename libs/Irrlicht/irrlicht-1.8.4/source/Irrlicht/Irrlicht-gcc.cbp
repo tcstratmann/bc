@@ -104,12 +104,15 @@
 				<Option createDefFile="1" />
 				<Option createStaticLib="1" />
 				<Compiler>
+					<Add option="-fexpensive-optimizations" />
 					<Add option="-O3" />
 					<Add option="-Wall" />
 					<Add option="-W" />
 					<Add option="-ffast-math" />
 					<Add option="-Wno-unused-parameter" />
 					<Add option="-U__STRICT_ANSI__" />
+					<Add option="-fexpensive-optimizations" />
+					<Add option="-O3" />
 					<Add option="-DWIN32" />
 					<Add option="-DNDEBUG" />
 					<Add option="-D_WINDOWS" />

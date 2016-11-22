@@ -10,6 +10,9 @@
 				<Option output="bridgecommand-bc" prefix_auto="1" extension_auto="1" />
 				<Option type="1" />
 				<Option compiler="gcc" />
+				<Compiler>
+					<Add directory="include" />
+				</Compiler>
 				<Linker>
 					<Add option="./libs/Irrlicht/irrlicht-1.8.4/lib/Win32-gcc/libIrrlicht.a" />
 					<Add library="ws2_32" />
@@ -20,6 +23,9 @@
 				<Option output="bridgecommand-bc" prefix_auto="1" extension_auto="1" />
 				<Option type="1" />
 				<Option compiler="gcc" />
+				<Compiler>
+					<Add directory="include" />
+				</Compiler>
 				<Linker>
 					<Add option="-L./libs/Irrlicht/irrlicht-1.8.4/lib/Linux" />
 					<Add library="Irrlicht" />
@@ -126,6 +132,7 @@
 			<Option compilerVar="WINDRES" />
 			<Option target="Windows" />
 		</Unit>
+		<Unit filename="include/MergeToolSocketWin.h" />
 		<Unit filename="json.hpp" />
 		<Unit filename="libs/enet/callbacks.c">
 			<Option compilerVar="CC" />
@@ -185,6 +192,7 @@
 		<Unit filename="main.cpp" />
 		<Unit filename="shaders/Water_ps.glsl" />
 		<Unit filename="shaders/Water_vs.glsl" />
+		<Unit filename="src/MergeToolSocketWin.cpp" />
 		<Extensions>
 			<code_completion />
 			<envvars />
